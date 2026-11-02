@@ -28,8 +28,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := os.WriteFile(filename+".asm", []byte(decodedAsm), 0644); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
+	fmt.Println(decodedAsm)
 }
