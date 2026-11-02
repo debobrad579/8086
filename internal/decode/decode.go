@@ -1,7 +1,7 @@
 package decode
 
 import (
-	"errors"
+	"encoding/binary"
 	"fmt"
 	"strings"
 )
@@ -33,11 +33,26 @@ var registers = [2]map[byte]string{
 	},
 }
 
+var effectiveAddressCalculations = map[byte]string{
+	0b000: "BX+SI",
+	0b001: "BX+DI",
+	0b010: "BP+SI",
+	0b011: "BP+DI",
+	0b100: "SI",
+	0b101: "DI",
+	0b110: "BP",
+	0b111: "BX",
+}
+
 func DecodeInstructions(data []byte) (string, error) {
 	var decodeBuilder strings.Builder
 	decodeBuilder.WriteString("bits 16\n")
 
-	for i := 0; i < len(data); i += 2 {
+	for i := 0; i < len(data); i += 1 {
+		instruction := ""
+
+		numBytes := 2
+
 		byte1 := data[i]
 		byte2 := data[i+1]
 
@@ -52,19 +67,58 @@ func DecodeInstructions(data []byte) (string, error) {
 		if !ok {
 			return "", fmt.Errorf("Invalid opcode: %b", byte1>>2)
 		}
+		instruction += fmt.Sprintf("%s ", opCodeString)
 
-		if mod != 0b11 {
-			return "", errors.New("Invalid mode")
+		switch mod {
+		case 0b00:
+			if rm == 0b110 {
+				numBytes += 2
+				d16 := binary.LittleEndian.Uint16([]byte{data[i+2], data[i+3]})
+				if d == 0 {
+					instruction += fmt.Sprintf("[%d],%s", d16, registers[w][reg])
+				} else {
+					instruction += fmt.Sprintf("%s,[%d]", registers[w][reg], d16)
+				}
+			} else {
+				if d == 0 {
+					instruction += fmt.Sprintf("[%s],%s", effectiveAddressCalculations[rm], registers[w][reg])
+				} else {
+					instruction += fmt.Sprintf("%s,[%s]", registers[w][reg], effectiveAddressCalculations[rm])
+				}
+			}
+		case 0b01:
+			{
+				numBytes += 1
+				d8 := int(data[i+2])
+				if d == 0 {
+					instruction += fmt.Sprintf("[%s+%d],%s", effectiveAddressCalculations[rm], d8, registers[w][reg])
+				} else {
+					instruction += fmt.Sprintf("%s,[%s+%d]", registers[w][reg], effectiveAddressCalculations[rm], d8)
+				}
+			}
+		case 0b10:
+			{
+				numBytes += 2
+				d16 := binary.LittleEndian.Uint16([]byte{data[i+2], data[i+3]})
+				if d == 0 {
+					instruction += fmt.Sprintf("[%s+%d],%s", effectiveAddressCalculations[rm], d16, registers[w][reg])
+				} else {
+					instruction += fmt.Sprintf("%s,[%s+%d]", registers[w][reg], effectiveAddressCalculations[rm], d16)
+				}
+			}
+		case 0b11:
+			{
+				if d == 0 {
+					instruction += fmt.Sprintf("%s,%s", registers[w][rm], registers[w][reg])
+				} else {
+					instruction += fmt.Sprintf("%s,%s", registers[w][reg], registers[w][rm])
+				}
+			}
 		}
 
-		regString := registers[w][reg]
-		rmString := registers[w][rm]
+		fmt.Fprintf(&decodeBuilder, "\n%s", instruction)
 
-		if d == 0 {
-			fmt.Fprintf(&decodeBuilder, "\n%s %s,%s", opCodeString, rmString, regString)
-		} else {
-			fmt.Fprintf(&decodeBuilder, "\n%s %s,%s", opCodeString, regString, rmString)
-		}
+		i += numBytes - 1
 	}
 
 	return decodeBuilder.String(), nil
