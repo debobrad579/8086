@@ -58,7 +58,7 @@ func DecodeInstructions(encoded []byte) (string, error) {
 		byte6 := getByteNumber(encoded, i, 6)
 
 		if byte1>>4 == 0b1011 {
-			instruction = "mov "
+			instruction = "MOV "
 
 			w := byte1 & 0b00001000 >> 3
 			reg := byte1 & 0b00000111
@@ -69,7 +69,7 @@ func DecodeInstructions(encoded []byte) (string, error) {
 
 			instruction += fmt.Sprintf("%s,%d", registers[w][reg], bytesToData(byte2, byte3))
 		} else if byte1>>2 == 0b100010 {
-			instruction += "mov "
+			instruction += "MOV "
 
 			d := byte1 & 0b00000010 >> 1
 			w := byte1 & 0b00000001
@@ -97,18 +97,18 @@ func DecodeInstructions(encoded []byte) (string, error) {
 				{
 					numBytes += 1
 					if d == 0 {
-						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signed8BitDisplacement(byte3), registers[w][reg])
+						instruction += fmt.Sprintf("[%s%+d],%s", effectiveAddressCalculations[rm], int8(byte3), registers[w][reg])
 					} else {
-						instruction += fmt.Sprintf("%s,[%s%s]", registers[w][reg], effectiveAddressCalculations[rm], signed8BitDisplacement(byte3))
+						instruction += fmt.Sprintf("%s,[%s%+d]", registers[w][reg], effectiveAddressCalculations[rm], int8(byte3))
 					}
 				}
 			case 0b10:
 				{
 					numBytes += 2
 					if d == 0 {
-						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4), registers[w][reg])
+						instruction += fmt.Sprintf("[%s%+d],%s", effectiveAddressCalculations[rm], int16(bytesToData(byte3, byte4)), registers[w][reg])
 					} else {
-						instruction += fmt.Sprintf("%s,[%s%s]", registers[w][reg], effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4))
+						instruction += fmt.Sprintf("%s,[%s%+d]", registers[w][reg], effectiveAddressCalculations[rm], int16(bytesToData(byte3, byte4)))
 					}
 				}
 			case 0b11:
@@ -123,24 +123,7 @@ func DecodeInstructions(encoded []byte) (string, error) {
 		} else if byte1>>1 == 0b1100011 {
 			instruction, numBytes = immediateToRegMem(byte1, byte2, byte3, byte4, byte5, byte6)
 		} else if byte1>>2 == 0b101000 {
-			instruction = "mov "
-			numBytes += 1
-
-			d := byte1 & 0b00000010 >> 1
-			w := byte1 & 0b00000001
-
-			register := "AX"
-			if w == 0 {
-				register = "AL"
-			}
-
-			addr := bytesToData(byte2, byte3)
-
-			if d == 0 {
-				instruction += fmt.Sprintf("%s,[%d]", register, addr)
-			} else {
-				instruction += fmt.Sprintf("[%d],%s", addr, register)
-			}
+			instruction, numBytes = movAccumulator(byte1, byte2, byte3)
 		} else {
 			return "", errors.New("Invalid instruction")
 		}
@@ -155,26 +138,6 @@ func DecodeInstructions(encoded []byte) (string, error) {
 
 func bytesToData(byte1 byte, byte2 byte) uint16 {
 	return binary.LittleEndian.Uint16([]byte{byte1, byte2})
-}
-
-func signedDisplacement(byte1 byte, byte2 byte) string {
-	displacement := int16(bytesToData(byte1, byte2))
-	var sign string
-	if displacement >= 0 {
-		sign = "+"
-	}
-
-	return fmt.Sprintf("%s%d", sign, displacement)
-}
-
-func signed8BitDisplacement(byte byte) string {
-	displacement := int8(byte)
-	var sign string
-	if displacement >= 0 {
-		sign = "+"
-	}
-
-	return fmt.Sprintf("%s%d", sign, displacement)
 }
 
 func getByteNumber(encoded []byte, i int, num int) byte {
@@ -198,7 +161,7 @@ func immediateToRegMem(
 	rm := byte2 & 0b00000111
 
 	if byte1>>1 == 0b1100011 {
-		instruction = "mov"
+		instruction = "MOV"
 	}
 
 	size := "byte"
@@ -227,22 +190,52 @@ func immediateToRegMem(
 		}
 	case 0b01:
 		return fmt.Sprintf(
-			"%s [%s%s],%s %d",
+			"%s [%s%+d],%s %d",
 			instruction,
 			effectiveAddressCalculations[rm],
-			signed8BitDisplacement(byte3),
+			int8(byte3),
 			size,
 			bytesToData(byte4, byte5),
 		), 4 + int(w)
 	case 0b10:
-		return fmt.Sprintf("%s [%s%s],%s %d",
+		return fmt.Sprintf("%s [%s%+d],%s %d",
 			instruction,
 			effectiveAddressCalculations[rm],
-			signedDisplacement(byte3, byte4),
+			int16(bytesToData(byte3, byte4)),
 			size,
 			bytesToData(byte5, byte6),
 		), 5 + int(w)
 	default:
 		return "", 0
+	}
+}
+
+func movAccumulator(byte1 byte, byte2 byte, byte3 byte) (instruction string, numBytes int) {
+	d := byte1 & 0b00000010 >> 1
+	w := byte1 & 0b00000001
+
+	register := "AX"
+	if w == 0 {
+		register = "AL"
+	}
+
+	addr := bytesToData(byte2, byte3)
+
+	if d == 0 {
+		return fmt.Sprintf("MOV %s,[%d]", register, addr), 3
+	} else {
+		return fmt.Sprintf("MOV [%d],%s", addr, register), 3
+	}
+}
+
+func immediateToAccumulator(byte1 byte, byte2 byte, byte3 byte) (instruction string, numBytes int) {
+	instruction = "ADD"
+
+	w := byte1 & 0b00000001
+
+	if w == 0 {
+		return fmt.Sprintf("%s AL,%d", instruction, int(byte2)), 2
+	} else {
+		return fmt.Sprintf("%s AX,%d", instruction, int(bytesToData(byte2, byte3))), 3
 	}
 }
