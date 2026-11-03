@@ -187,14 +187,19 @@ func DecodeInstructions(encoded []byte) (string, error) {
 			byte3 := encoded[i+2]
 
 			d := byte1 & 0b00000010 >> 1
-			_ = byte1 & 0b00000001
+			w := byte1 & 0b00000001
+
+			register := "AX"
+			if w == 0 {
+				register = "AL"
+			}
 
 			addr := bytesToData(byte2, byte3)
 
 			if d == 0 {
-				instruction += fmt.Sprintf("AX,[%d]", addr)
+				instruction += fmt.Sprintf("%s,[%d]", register, addr)
 			} else {
-				instruction += fmt.Sprintf("[%d],AX", addr)
+				instruction += fmt.Sprintf("[%d],%s", addr, register)
 			}
 		} else {
 			return "", errors.New("Invalid instruction")
