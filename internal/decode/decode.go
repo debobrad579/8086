@@ -181,6 +181,21 @@ func DecodeInstructions(encoded []byte) (string, error) {
 					instruction += fmt.Sprintf("[%s+%d],%s %d", effectiveAddressCalculations[rm], bytesToData(byte3, byte4), size, bytesToData(byte5, byte6))
 				}
 			}
+		} else if byte1>>2 == 0b101000 {
+			instruction = "mov "
+			numBytes += 1
+			byte3 := encoded[i+2]
+
+			d := byte1 & 0b00000010 >> 1
+			_ = byte1 & 0b00000001
+
+			addr := bytesToData(byte2, byte3)
+
+			if d == 0 {
+				instruction += fmt.Sprintf("AX,[%d]", addr)
+			} else {
+				instruction += fmt.Sprintf("[%d],AX", addr)
+			}
 		} else {
 			return "", errors.New("Invalid instruction")
 		}
