@@ -1,7 +1,6 @@
 package decode
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"strings"
@@ -41,6 +40,17 @@ var effectiveAddressCalculations = map[byte]string{
 	0b111: "BX",
 }
 
+var aluOpCodes = map[byte]string{
+	0b000: "ADD",
+	0b001: "OR",
+	0b010: "ADC",
+	0b011: "SBB",
+	0b100: "AND",
+	0b101: "SUB",
+	0b110: "BP",
+	0b111: "CMP",
+}
+
 func DecodeInstructions(encoded []byte) (string, error) {
 	var decodeBuilder strings.Builder
 	decodeBuilder.WriteString("bits 16\n")
@@ -57,7 +67,9 @@ func DecodeInstructions(encoded []byte) (string, error) {
 		byte5 := getByteNumber(encoded, i, 5)
 		byte6 := getByteNumber(encoded, i, 6)
 
-		if byte1>>4 == 0b1011 {
+		if byte1>>6 == 0b00 && (byte1&0b00000110)>>1 == 0b10 {
+			instruction, numBytes = immediateToAccumulator(byte1, byte2, byte3)
+		} else if byte1>>4 == 0b1011 {
 			instruction = "MOV "
 
 			w := byte1 & 0b00001000 >> 3
@@ -134,18 +146,6 @@ func DecodeInstructions(encoded []byte) (string, error) {
 	}
 
 	return decodeBuilder.String(), nil
-}
-
-func bytesToData(byte1 byte, byte2 byte) uint16 {
-	return binary.LittleEndian.Uint16([]byte{byte1, byte2})
-}
-
-func getByteNumber(encoded []byte, i int, num int) byte {
-	index := i + num - 1
-	if index < 0 || index >= len(encoded) {
-		return 0
-	}
-	return encoded[index]
 }
 
 func immediateToRegMem(
@@ -229,7 +229,7 @@ func movAccumulator(byte1 byte, byte2 byte, byte3 byte) (instruction string, num
 }
 
 func immediateToAccumulator(byte1 byte, byte2 byte, byte3 byte) (instruction string, numBytes int) {
-	instruction = "ADD"
+	instruction = aluOpCodes[(byte1&0b00111000)>>3]
 
 	w := byte1 & 0b00000001
 
