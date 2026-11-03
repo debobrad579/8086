@@ -50,8 +50,12 @@ func DecodeInstructions(encoded []byte) (string, error) {
 
 		numBytes := 2
 
-		byte1 := encoded[i]
-		byte2 := encoded[i+1]
+		byte1 := getByteNumber(encoded, i, 1)
+		byte2 := getByteNumber(encoded, i, 2)
+		byte3 := getByteNumber(encoded, i, 3)
+		byte4 := getByteNumber(encoded, i, 4)
+		byte5 := getByteNumber(encoded, i, 5)
+		byte6 := getByteNumber(encoded, i, 6)
 
 		if byte1>>4 == 0b1011 {
 			instruction = "mov "
@@ -59,10 +63,8 @@ func DecodeInstructions(encoded []byte) (string, error) {
 			w := byte1 & 0b00001000 >> 3
 			reg := byte1 & 0b00000111
 
-			var byte3 byte
 			if w == 1 {
 				numBytes += 1
-				byte3 = encoded[i+2]
 			}
 
 			instruction += fmt.Sprintf("%s,%d", registers[w][reg], bytesToData(byte2, byte3))
@@ -79,8 +81,6 @@ func DecodeInstructions(encoded []byte) (string, error) {
 			case 0b00:
 				if rm == 0b110 {
 					numBytes += 2
-					byte3 := encoded[i+2]
-					byte4 := encoded[i+3]
 					if d == 0 {
 						instruction += fmt.Sprintf("[%d],%s", bytesToData(byte3, byte4), registers[w][reg])
 					} else {
@@ -96,7 +96,6 @@ func DecodeInstructions(encoded []byte) (string, error) {
 			case 0b01:
 				{
 					numBytes += 1
-					byte3 := encoded[i+2]
 					if d == 0 {
 						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signed8BitDisplacement(byte3), registers[w][reg])
 					} else {
@@ -106,8 +105,6 @@ func DecodeInstructions(encoded []byte) (string, error) {
 			case 0b10:
 				{
 					numBytes += 2
-					byte3 := encoded[i+2]
-					byte4 := encoded[i+3]
 					if d == 0 {
 						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4), registers[w][reg])
 					} else {
@@ -124,67 +121,10 @@ func DecodeInstructions(encoded []byte) (string, error) {
 				}
 			}
 		} else if byte1>>1 == 0b1100011 {
-			instruction = "mov "
-			numBytes += 1
-
-			w := byte1 & 0b00000001
-			mod := byte2 >> 6
-			rm := byte2 & 0b00000111
-
-			size := "byte"
-			if w == 1 {
-				size = "word"
-				numBytes += 1
-			}
-
-			switch mod {
-			case 0b00:
-				if rm == 0b110 {
-					numBytes += 2
-					byte3 := encoded[i+2]
-					byte4 := encoded[i+3]
-					byte5 := encoded[i+4]
-					var byte6 byte
-					if w == 1 {
-						byte6 = encoded[i+5]
-					}
-					instruction += fmt.Sprintf("[%d],%s %d", bytesToData(byte3, byte4), size, bytesToData(byte5, byte6))
-				} else {
-					byte3 := encoded[i+2]
-					var byte4 byte
-					if w == 1 {
-						byte4 = encoded[i+3]
-					}
-					instruction += fmt.Sprintf("[%s],%s %d", effectiveAddressCalculations[rm], size, bytesToData(byte3, byte4))
-				}
-			case 0b01:
-				{
-					numBytes += 1
-					byte3 := encoded[i+2]
-					byte4 := encoded[i+3]
-					var byte5 byte
-					if w == 1 {
-						byte5 = encoded[i+4]
-					}
-					instruction += fmt.Sprintf("[%s%s],%s %d", effectiveAddressCalculations[rm], signed8BitDisplacement(byte3), size, bytesToData(byte4, byte5))
-				}
-			case 0b10:
-				{
-					numBytes += 2
-					byte3 := encoded[i+2]
-					byte4 := encoded[i+3]
-					byte5 := encoded[i+4]
-					var byte6 byte
-					if w == 1 {
-						byte6 = encoded[i+5]
-					}
-					instruction += fmt.Sprintf("[%s%s],%s %d", effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4), size, bytesToData(byte5, byte6))
-				}
-			}
+			instruction, numBytes = immediateToRegMem(byte1, byte2, byte3, byte4, byte5, byte6)
 		} else if byte1>>2 == 0b101000 {
 			instruction = "mov "
 			numBytes += 1
-			byte3 := encoded[i+2]
 
 			d := byte1 & 0b00000010 >> 1
 			w := byte1 & 0b00000001
@@ -235,4 +175,74 @@ func signed8BitDisplacement(byte byte) string {
 	}
 
 	return fmt.Sprintf("%s%d", sign, displacement)
+}
+
+func getByteNumber(encoded []byte, i int, num int) byte {
+	index := i + num - 1
+	if index < 0 || index >= len(encoded) {
+		return 0
+	}
+	return encoded[index]
+}
+
+func immediateToRegMem(
+	byte1 byte,
+	byte2 byte,
+	byte3 byte,
+	byte4 byte,
+	byte5 byte,
+	byte6 byte,
+) (instruction string, numBytes int) {
+	w := byte1 & 0b00000001
+	mod := byte2 >> 6
+	rm := byte2 & 0b00000111
+
+	if byte1>>1 == 0b1100011 {
+		instruction = "mov"
+	}
+
+	size := "byte"
+	if w == 1 {
+		size = "word"
+	}
+
+	switch mod {
+	case 0b00:
+		if rm == 0b110 {
+			return fmt.Sprintf(
+				"%s [%d],%s %d",
+				instruction,
+				bytesToData(byte3, byte4),
+				size,
+				bytesToData(byte5, byte6),
+			), 5 + int(w)
+		} else {
+			return fmt.Sprintf(
+				"%s [%s],%s %d",
+				instruction,
+				effectiveAddressCalculations[rm],
+				size,
+				bytesToData(byte3, byte4),
+			), 3 + int(w)
+		}
+	case 0b01:
+		return fmt.Sprintf(
+			"%s [%s%s],%s %d",
+			instruction,
+			effectiveAddressCalculations[rm],
+			signed8BitDisplacement(byte3),
+			size,
+			bytesToData(byte4, byte5),
+		), 4 + int(w)
+	case 0b10:
+		return fmt.Sprintf("%s [%s%s],%s %d",
+			instruction,
+			effectiveAddressCalculations[rm],
+			signedDisplacement(byte3, byte4),
+			size,
+			bytesToData(byte5, byte6),
+		), 5 + int(w)
+	default:
+		return "", 0
+	}
 }
