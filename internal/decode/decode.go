@@ -98,9 +98,9 @@ func DecodeInstructions(encoded []byte) (string, error) {
 					numBytes += 1
 					byte3 := encoded[i+2]
 					if d == 0 {
-						instruction += fmt.Sprintf("[%s+%d],%s", effectiveAddressCalculations[rm], int(byte3), registers[w][reg])
+						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signed8BitDisplacement(byte3), registers[w][reg])
 					} else {
-						instruction += fmt.Sprintf("%s,[%s+%d]", registers[w][reg], effectiveAddressCalculations[rm], int(byte3))
+						instruction += fmt.Sprintf("%s,[%s%s]", registers[w][reg], effectiveAddressCalculations[rm], signed8BitDisplacement(byte3))
 					}
 				}
 			case 0b10:
@@ -109,9 +109,9 @@ func DecodeInstructions(encoded []byte) (string, error) {
 					byte3 := encoded[i+2]
 					byte4 := encoded[i+3]
 					if d == 0 {
-						instruction += fmt.Sprintf("[%s+%d],%s", effectiveAddressCalculations[rm], bytesToData(byte3, byte4), registers[w][reg])
+						instruction += fmt.Sprintf("[%s%s],%s", effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4), registers[w][reg])
 					} else {
-						instruction += fmt.Sprintf("%s,[%s+%d]", registers[w][reg], effectiveAddressCalculations[rm], bytesToData(byte3, byte4))
+						instruction += fmt.Sprintf("%s,[%s%s]", registers[w][reg], effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4))
 					}
 				}
 			case 0b11:
@@ -166,7 +166,7 @@ func DecodeInstructions(encoded []byte) (string, error) {
 					if w == 1 {
 						byte5 = encoded[i+4]
 					}
-					instruction += fmt.Sprintf("[%s+%d],%s %d", effectiveAddressCalculations[rm], int(byte3), size, bytesToData(byte4, byte5))
+					instruction += fmt.Sprintf("[%s%s],%s %d", effectiveAddressCalculations[rm], signed8BitDisplacement(byte3), size, bytesToData(byte4, byte5))
 				}
 			case 0b10:
 				{
@@ -178,7 +178,7 @@ func DecodeInstructions(encoded []byte) (string, error) {
 					if w == 1 {
 						byte6 = encoded[i+5]
 					}
-					instruction += fmt.Sprintf("[%s+%d],%s %d", effectiveAddressCalculations[rm], bytesToData(byte3, byte4), size, bytesToData(byte5, byte6))
+					instruction += fmt.Sprintf("[%s%s],%s %d", effectiveAddressCalculations[rm], signedDisplacement(byte3, byte4), size, bytesToData(byte5, byte6))
 				}
 			}
 		} else if byte1>>2 == 0b101000 {
@@ -210,4 +210,24 @@ func DecodeInstructions(encoded []byte) (string, error) {
 
 func bytesToData(byte1 byte, byte2 byte) uint16 {
 	return binary.LittleEndian.Uint16([]byte{byte1, byte2})
+}
+
+func signedDisplacement(byte1 byte, byte2 byte) string {
+	displacement := int16(bytesToData(byte1, byte2))
+	var sign string
+	if displacement >= 0 {
+		sign = "+"
+	}
+
+	return fmt.Sprintf("%s%d", sign, displacement)
+}
+
+func signed8BitDisplacement(byte byte) string {
+	displacement := int8(byte)
+	var sign string
+	if displacement >= 0 {
+		sign = "+"
+	}
+
+	return fmt.Sprintf("%s%d", sign, displacement)
 }
