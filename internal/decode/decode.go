@@ -220,21 +220,26 @@ func immediateToRegMem(
 		s = 0
 	} else if byte1>>2 == 0b100000 {
 		instruction = aluOpCodes[opCode]
+	} else {
+		return "", 0
 	}
 
 	var dataByte1 byte
 	var dataByte2 byte
 	var displacement string
 
+	directAddressing := false
+
 	switch mod {
 	case 0b00:
 		if rm == 0b110 {
-			dataByte1 = byte5
-			dataByte2 = byte6
+			directAddressing = true
 			displacement = fmt.Sprintf(
 				"%d",
-				int16(bytesToData(byte3, byte4)),
+				bytesToData(byte3, byte4),
 			)
+			dataByte1 = byte5
+			dataByte2 = byte6
 			numBytes = 4
 		} else {
 			dataByte1 = byte3
@@ -242,18 +247,22 @@ func immediateToRegMem(
 			numBytes = 2
 		}
 	case 0b01:
+		displacement = fmt.Sprintf("%+d", int8(byte3))
 		dataByte1 = byte4
 		dataByte2 = byte5
-		displacement = fmt.Sprintf("%+d", int8(byte3))
 		numBytes = 3
 	case 0b10:
-		dataByte1 = byte5
-		dataByte2 = byte6
 		displacement = fmt.Sprintf(
 			"%+d",
 			int16(bytesToData(byte3, byte4)),
 		)
+		dataByte1 = byte5
+		dataByte2 = byte6
 		numBytes = 4
+	case 0b11:
+		dataByte1 = byte3
+		dataByte2 = byte4
+		numBytes = 2
 	}
 
 	immediateSize := 1
@@ -271,14 +280,36 @@ func immediateToRegMem(
 	} else {
 		size = "word"
 
-		if s != 0 {
-			data = fmt.Sprintf("%d", int16(dataByte1))
+		if s == 1 {
+			data = fmt.Sprintf("%d", int8(dataByte1))
 		} else {
 			data = fmt.Sprintf(
 				"%d",
 				int16(bytesToData(dataByte1, dataByte2)),
 			)
 		}
+	}
+
+	numBytes += immediateSize
+
+	if mod == 0b11 {
+		return fmt.Sprintf(
+			"%s %s,%s %s",
+			instruction,
+			registers[w][rm],
+			size,
+			data,
+		), numBytes
+	}
+
+	if directAddressing {
+		return fmt.Sprintf(
+			"%s [%s],%s %s",
+			instruction,
+			displacement,
+			size,
+			data,
+		), numBytes
 	}
 
 	return fmt.Sprintf(
@@ -288,7 +319,7 @@ func immediateToRegMem(
 		displacement,
 		size,
 		data,
-	), numBytes + immediateSize
+	), numBytes
 }
 
 func movAccumulator(byte1 byte, byte2 byte, byte3 byte) (instruction string, numBytes int) {
