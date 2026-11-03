@@ -51,6 +51,29 @@ var aluOpCodes = map[byte]string{
 	0b111: "CMP",
 }
 
+var jumps = map[byte]string{
+	0b01110000: "JO",
+	0b01110001: "JNO",
+	0b01110010: "JB",
+	0b01110011: "JNB",
+	0b01110100: "JZ",
+	0b01110101: "JNZ",
+	0b01110110: "JBE",
+	0b01110111: "JNBE",
+	0b01111000: "JS",
+	0b01111001: "JNS",
+	0b01111010: "JP",
+	0b01111011: "JNP",
+	0b01111100: "JL",
+	0b01111101: "JNL",
+	0b01111110: "JLE",
+	0b01111111: "JNLE",
+	0b11100000: "LOOPNZ",
+	0b11100001: "LOOPZ",
+	0b11100010: "LOOP",
+	0b11100011: "JCXZ",
+}
+
 func DecodeInstructions(encoded []byte) (string, error) {
 	var decodeBuilder strings.Builder
 	decodeBuilder.WriteString("bits 16\n")
@@ -67,7 +90,9 @@ func DecodeInstructions(encoded []byte) (string, error) {
 		byte5 := getByteNumber(encoded, i, 5)
 		byte6 := getByteNumber(encoded, i, 6)
 
-		if byte1>>6 == 0b00 && (byte1&0b00000110)>>1 == 0b10 {
+		if jump, ok := jumps[byte1]; ok {
+			instruction, numBytes = fmt.Sprintf("%s $%+d", jump, int8(byte2)+2), 2
+		} else if byte1>>6 == 0b00 && (byte1&0b00000110)>>1 == 0b10 {
 			instruction, numBytes = immediateToAccumulator(byte1, byte2, byte3)
 		} else if byte1>>4 == 0b1011 {
 			instruction = "MOV "
