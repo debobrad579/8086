@@ -5,13 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/debobrad579/8086/internal/decode"
 )
 
 func TestDecompileToAssembly(t *testing.T) {
-	testDir := "../../testing"
+	testDir := "test_cases"
 
 	testFiles, err := os.ReadDir(testDir)
 	if err != nil {
@@ -19,7 +20,7 @@ func TestDecompileToAssembly(t *testing.T) {
 	}
 
 	for _, testFile := range testFiles {
-		if testFile.IsDir() {
+		if testFile.IsDir() || !strings.HasSuffix(testFile.Name(), ".asm") {
 			continue
 		}
 
